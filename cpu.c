@@ -1,78 +1,53 @@
 #include <assert.h>
+#include <fcntl.h>
 #include <features.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/time.h>
 #include <unistd.h>
 
-#define LOWER 0
-#define UPPER 300
-#define STEP 300
+long long loops;
+pthread_mutex_t lock;
 
-int balls;
-
-float F_to_C(float *F) {
-  scanf("%f", F);
-  float C = (5.0 / 9.0) * (*F - 32.0);
-
-  printf("F:%.0f\tC:%.2f\n", *F, C);
-  return C;
-}
-
-void print_80plus_char() {
-  int ln, c;
-  char *line = "balls";
-
-  for (ln = 0; (c = getchar()) != '\n' && c != EOF; ++ln) {
-    line[ln] = c;
+void *worker(void *balls) {
+  for (long long i = 0; i < loops; i++) {
+    pthread_mutex_lock(&lock);
+    int *ball = (int *)balls;
+    *ball += 1;
+    pthread_mutex_unlock(&lock);
   }
-
-  if (ln >= 80) {
-    printf("%s", line);
-  }
-}
-
-void clean_lines() {
-  int ln, c;
-  char line[1000];
-
-  for (ln = 0; (c = getchar()) != '\n' && c != EOF; ++ln) {
-    line[ln] = c;
-  }
-
-  line[ln] = '\0';
-
-  for (; ln > 0 && (line[ln - 1] == '\t' || line[ln - 1] == ' '); --ln) {
-  }
-
-  line[ln] = '\0';
-
-  printf("%s %d", line, ln);
-}
-
-void reverse(char s[]) {
-  int length = strlen(s);
-
-  for (int i = length - 1; i >= 0; --i) {
-    printf("%c", s[i]);
-  }
+  return NULL;
 }
 
 int main(int argc, char *argv[]) {
 
-  /*float C = F_to_C(&F);*/
-  /*print_80plus_char();*/
-  /*clean_lines();*/
-  /*reverse("ballsxddMORS");*/
+  loops = atoi(argv[1]);
 
-  void *firstEnd = sbrk(0);
+  long long balls = 0;
 
-  /*sbrk(0x1);*/
+  pthread_t p1, p2;
 
-  int *newArr = (int *)firstEnd;
+  pthread_mutex_init(&lock, NULL);
+  pthread_create(&p1, NULL, worker, (void *)&balls);
+  pthread_create(&p2, NULL, worker, (void *)&balls);
+  pthread_join(p1, NULL);
+  pthread_join(p2, NULL);
 
-  printf("%p %p %p", &newArr[0], &newArr[1], &newArr[30]);
+  int fd = open("./balls.txt", O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+
+  assert(fd > -1);
+  printf("balls");
+
+  int rc = write(fd, "balls balls\t balllsda\nvagabond\0", 30);
+
+  assert(rc == 30 && "balls");
+
+  close(fd);
+
+  printf("%lld", balls);
+
+  pthread_mutex_destroy(&lock);
 
   return 0;
 }

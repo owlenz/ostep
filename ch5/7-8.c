@@ -4,11 +4,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define BUFFS 1000
+#define SIZE 1000
 
 int main() {
   int x = 100;
-  char buff[BUFFS];
   int filedes[2];
   int status = pipe(filedes);
   int rc = fork();
@@ -34,10 +33,10 @@ int main() {
 
     dup2(filedes[0], STDIN_FILENO);
     close(filedes[0]);
-    char input[10];
+    char input[SIZE];
     scanf("%s", input);
 
-    printf("Received from pipe: %s", input);
+    printf("Received from pipe: %s \n", input);
     close(filedes[0]);
 		exit(EXIT_SUCCESS);
   } 
