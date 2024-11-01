@@ -1,3 +1,6 @@
+// Stride Scheduling is a fair share scheduling that achieves
+// the process tickets/propotions in every schedule cycle.
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -8,8 +11,6 @@ typedef struct process {
   int stride;
   int pass;
 } process;
-
-//
 
 process remove_min(process **all, int *size) {
   int min = 0;
