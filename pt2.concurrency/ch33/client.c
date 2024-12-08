@@ -4,9 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #define MAX_SECS 10
+#define BUF_SIZE 1024
 
 int main() {
   int client_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -37,11 +39,21 @@ int main() {
     return 1;
   }
   ssize_t n;
-  struct timeval tv;
   // receiving time of day
-  while ((n = recv(client_fd, &tv, sizeof(tv), 0)) > 0) {
-    printf("Client: Data received: seconds: %ld\n", tv.tv_sec);
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  char buf[BUF_SIZE];
+  snprintf(buf, BUF_SIZE, "gettimeofday: tv_sec:%ld , tv_usec:%ld", tv.tv_sec,
+           tv.tv_usec);
+  if (send(client_fd, buf, BUF_SIZE, MSG_CONFIRM) == -1) {
+    perror("error sending time of day");
+    return 1;
+  } else {
+    printf("Client: time of day sent\n");
   }
+  /*while ((n = recv(client_fd, &tv, sizeof(tv), 0)) > 0) {*/
+  /*  printf("Client: Data received: seconds: %ld\n", tv.tv_sec);*/
+  /*}*/
   if (n < 0)
     perror("recv errro");
 }

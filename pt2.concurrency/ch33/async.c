@@ -46,6 +46,7 @@ int main() {
     return -1;
   }
 
+
   printf("buf output: %s \n", (char *)aiocbp->aio_buf);
   int fdx = open("output.txt", O_WRONLY, S_IRWXU);
   if (fdx == -1) {
