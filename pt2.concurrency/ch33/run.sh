@@ -6,10 +6,10 @@ if [[ ! -d "build" ]];then
 	mkdir build
 fi
 
-gcc -o build/server server.c
-gcc -o build/client client.c
+gcc -o build/server src/server.c -I./include/
+gcc -o build/client src/client.c -I./include/
 
 ./build/server &
 sleep 1
 
-./build/client
+./build/client $1

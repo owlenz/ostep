@@ -1,7 +1,7 @@
+#include "balls.h"
 #include <aio.h>
 #include <arpa/inet.h>
 #include <bits/types/struct_timeval.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -15,9 +15,10 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#define BUF_SIZE 1024
 #define MAX_CLIENTS 10
 
+// my dumb ass didnt know that setting this as non-blocking
+// will affect make recv non-blocking too xddMORS
 int set_nonblocking(int fd) {
   int erm = fcntl(fd, F_GETFL, 0);
   if (erm == -1)
@@ -70,19 +71,10 @@ int main() {
     fds[i].fd = -1;
     fds[i].events = POLLIN;
   }
-
-  struct aiocb *aiocbp = malloc(MAX_CLIENTS * sizeof(struct aiocb));
-  for (int i = 0; i < MAX_CLIENTS; i++) {
-    memset(&aiocbp[i], 0, sizeof(struct aiocb));
-    aiocbp[i].aio_buf = malloc(BUF_SIZE);
-    aiocbp[i].aio_nbytes = BUF_SIZE;
-    aiocbp[i].aio_fildes = 0;
-  }
-
   while (1) {
 
     // Polling
-    int poll_result = poll(fds, MAX_CLIENTS + 1, 100);
+    int poll_result = poll(fds, MAX_CLIENTS + 1, 1000);
 
     if (poll_result == -1)
       perror("poll error");
@@ -100,8 +92,6 @@ int main() {
         if (fds[i].fd == -1) {
           fds[i].fd = client_fd;
           fds[i].events = POLLIN;
-          aiocbp[i - 1].aio_fildes = client_fd;
-          aio_read(&aiocbp[i - 1]);
           full = 0;
           break;
         }
@@ -111,21 +101,39 @@ int main() {
         close(client_fd);
       }
     }
-
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-      if (aiocbp[i].aio_fildes > 0) {
-        int err_res = aio_error(&aiocbp[i]);
-        if (err_res == EINPROGRESS) {
-          aiocbp[i].aio_sigevent.sigev_value.sival_int++;
-        } else if (err_res == 0) {
-          /*printf("Read successful for fd %d after %d iter, sec:%ld\n",*/
-          /*       aiocbp[i].aio_fildes,*/
-          /*       aiocbp[i].aio_sigevent.sigev_value.sival_int,*/
-          printf("MESSAGE: %s\n", (char *)aiocbp[i].aio_buf);
-          close(aiocbp[i].aio_fildes);
-          aiocbp[i].aio_fildes = -1;
-        } else if (err_res != 0) {
-          perror("aio_error");
+    for (int i = 1; i < MAX_CLIENTS + 1; i++) {
+      if (fds[i].revents & POLLIN && fds[i].fd != -1) {
+        void *buf = malloc(sizeof(struct message));
+        int n = recv(fds[i].fd, buf, BUF_SIZE, 0);
+        if (n == -1) {
+          perror("SERVER: error recieving");
+          continue;
+        } else if (n == 0) {
+          perror("SERVER: client disconnected");
+          close(fds[i].fd);
+          fds[i].fd = -1;
+          continue;
+        } else {
+          struct message *msg = (struct message *)buf;
+          if (msg->type == PATH) {
+            int file = open(msg->content, O_RDONLY, S_IRWXU);
+            if (file == -1) {
+              perror("Error opening file");
+            }
+            char buf[BUF_SIZE];
+            read(file, buf, BUF_SIZE);
+            msg->type = STRING;
+            strcpy(msg->content, buf);
+            if ((send(fds[i].fd, msg, sizeof(struct message), MSG_CONFIRM)) ==
+                -1) {
+              perror("error sending file content");
+              return 1;
+            } else {
+              printf("Server: file content sent \n");
+              close(fds[i].fd);
+              fds[i].fd = -1;
+            }
+          }
         }
       }
     }
