@@ -1,4 +1,4 @@
-#include "balls.h"
+#include "../include/balls.h"
 #include <aio.h>
 #include <arpa/inet.h>
 #include <bits/types/struct_timeval.h>
@@ -18,12 +18,70 @@
 #define MAX_CLIENTS 10
 
 // my dumb ass didnt know that setting this as non-blocking
-// will affect make recv non-blocking too xddMORS
+// will affect recv, makeing it non-blocking too xddMORS
 int set_nonblocking(int fd) {
   int erm = fcntl(fd, F_GETFL, 0);
   if (erm == -1)
     return -1;
   return fcntl(fd, F_SETFL, erm | O_NONBLOCK);
+}
+
+// Handling GET requests
+void handle_get(int client_fd) {
+  const char *response_body = "Hello, GET!";
+  size_t content_length = strlen(response_body);
+
+  char response[BUF_SIZE];
+  snprintf(response, BUF_SIZE,
+           "HTTP/1.1 200 OK\r\n"
+           "Content-Length: %zu\r\n"
+           "Content-Type: text/plain\r\n"
+           "\r\n"
+           "%s",
+           content_length, response_body);
+  send(client_fd, response, strlen(response), 0);
+};
+
+// Handling POST requests
+void handle_post(int client_fd) {
+
+  const char *body = "Hello, POST! Body:\nRIP BOZO";
+  size_t content_length = strlen(body);
+  char response[BUF_SIZE];
+  snprintf(response, BUF_SIZE,
+           "HTTP/1.1 200 OK\r\n"
+           "Content-Length: %zu\r\n"
+           "Content-Type: text/plain\r\n"
+           "\r\n"
+           "%s",
+           content_length, body);
+  send(client_fd, response, strlen(response), 0);
+};
+
+void handle_req(int *client_fd) {
+  // Recieve Data
+  char buf[BUF_SIZE];
+  int bytes_read = recv(*client_fd, buf, BUF_SIZE - 1, 0);
+
+  // error handling
+  if (bytes_read == -1) {
+    perror("SERVER: error recieving");
+  } else if (bytes_read == 0) {
+    perror("SERVER: client disconnected");
+    close(*client_fd);
+    *client_fd = -1;
+  }
+  buf[bytes_read] = '\0';
+  printf("buf: %s\n", buf);
+
+  // Handle The Request
+  if (strncmp(buf, "GET", 3) == 0) {
+    handle_get(*client_fd);
+  } else if (strncmp(buf, "POST", 4) == 0) {
+    handle_post(*client_fd);
+  }
+  close(*client_fd);
+  *client_fd = -1;
 }
 
 int main() {
@@ -38,11 +96,19 @@ int main() {
   struct in_addr in_addr;
   inet_pton(AF_INET, "127.0.0.1", &in_addr);
 
+  // For Handling address in use even after killing server
+  // (SO_REUSEADDR)
+  int opt = 1;
+  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) ==
+      -1) {
+    perror("setsockopt failed");
+  }
+
   struct sockaddr_in *sockaddr = malloc(sizeof(struct sockaddr_in));
   memset(sockaddr, 0, sizeof(struct sockaddr_in));
   sockaddr->sin_family = AF_INET;
   sockaddr->sin_addr = in_addr;
-  sockaddr->sin_port = htons(4040);
+  sockaddr->sin_port = htons(6969);
 
   // binding socket with address
   if (bind(server_fd, (const struct sockaddr *)sockaddr,
@@ -62,7 +128,7 @@ int main() {
     return 1;
   }
 
-  printf("Server: Socket successfully bound to 127.0.0.1:4040\n");
+  printf("Server is listening on http://127.0.0.1:6969\n");
   struct pollfd fds[MAX_CLIENTS + 1];
   fds[0].fd = server_fd;
   fds[0].events = POLLIN;
@@ -103,38 +169,7 @@ int main() {
     }
     for (int i = 1; i < MAX_CLIENTS + 1; i++) {
       if (fds[i].revents & POLLIN && fds[i].fd != -1) {
-        void *buf = malloc(sizeof(struct message));
-        int n = recv(fds[i].fd, buf, BUF_SIZE, 0);
-        if (n == -1) {
-          perror("SERVER: error recieving");
-          continue;
-        } else if (n == 0) {
-          perror("SERVER: client disconnected");
-          close(fds[i].fd);
-          fds[i].fd = -1;
-          continue;
-        } else {
-          struct message *msg = (struct message *)buf;
-          if (msg->type == PATH) {
-            int file = open(msg->content, O_RDONLY, S_IRWXU);
-            if (file == -1) {
-              perror("Error opening file");
-            }
-            char buf[BUF_SIZE];
-            read(file, buf, BUF_SIZE);
-            msg->type = STRING;
-            strcpy(msg->content, buf);
-            if ((send(fds[i].fd, msg, sizeof(struct message), MSG_CONFIRM)) ==
-                -1) {
-              perror("error sending file content");
-              return 1;
-            } else {
-              printf("Server: file content sent \n");
-              close(fds[i].fd);
-              fds[i].fd = -1;
-            }
-          }
-        }
+        handle_req(&fds[i].fd);
       }
     }
   }

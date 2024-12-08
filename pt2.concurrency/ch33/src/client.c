@@ -1,4 +1,4 @@
-#include "balls.h"
+#include "../include/balls.h"
 #include <arpa/inet.h>
 #include <bits/types/struct_timeval.h>
 #include <netinet/in.h>
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
   memset(&server_addr, 0, sizeof(server_addr));
 
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(4040);
+  server_addr.sin_port = htons(6969);
   if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) != 1) {
     perror("error converting ip str to byte");
     return 1;
